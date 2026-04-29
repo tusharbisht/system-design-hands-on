@@ -1,0 +1,83 @@
+{
+  "branch": "design/02-rag-qa",
+  "endpoint": "POST /ask",
+  "tests": [
+    {
+      "id": "smoke-01",
+      "type": "smoke",
+      "input": {"question": "What does VACUUM do in Postgres?"},
+      "expected": {"status": 200, "fields_required": ["question", "answer", "citations", "retrieved_doc_ids"], "types": {"citations": "array", "retrieved_doc_ids": "array"}},
+      "weight": 1.0
+    },
+    {
+      "id": "in-corpus-01",
+      "type": "qa",
+      "input": {"question": "What does VACUUM do in Postgres and why does it matter for MVCC?"},
+      "expected": {"answer_must_mention": ["dead tuples", "MVCC"], "citations_should_include": "d001"},
+      "weight": 2.0
+    },
+    {
+      "id": "in-corpus-02",
+      "type": "qa",
+      "input": {"question": "What chunk size is recommended for RAG?"},
+      "expected": {"answer_must_mention_one_of": ["256", "512", "tokens"], "citations_should_include": "d005"},
+      "weight": 2.0
+    },
+    {
+      "id": "in-corpus-03",
+      "type": "qa",
+      "input": {"question": "How do I combine BM25 and vector search rankings?"},
+      "expected": {"answer_must_mention": ["RRF", "rank fusion"], "citations_should_include": "d004"},
+      "weight": 2.0
+    },
+    {
+      "id": "multi-doc-01",
+      "type": "qa",
+      "input": {"question": "What's the relationship between cosine similarity and dot product for unit vectors, and why does it matter for ANN indexes?"},
+      "expected": {"answer_must_mention_one_of": ["normalized", "unit length", "equivalent"], "citations_should_include_any_of": ["d002", "d006"]},
+      "weight": 2.0
+    },
+    {
+      "id": "ooc-01",
+      "type": "refusal",
+      "input": {"question": "What's the population of Tokyo?"},
+      "expected": {"citations_must_equal": [], "answer_must_express_uncertainty": true},
+      "weight": 2.0
+    },
+    {
+      "id": "ooc-02",
+      "type": "refusal",
+      "input": {"question": "Tell me a recipe for tiramisu."},
+      "expected": {"citations_must_equal": [], "answer_must_express_uncertainty": true},
+      "weight": 2.0
+    },
+    {
+      "id": "near-corpus-01",
+      "type": "refusal",
+      "input": {"question": "What chunk size should I use for embedding models trained specifically on Tagalog?"},
+      "expected": {"citations_must_equal": [], "answer_must_express_uncertainty": true, "must_not_invent_specifics": true},
+      "weight": 2.5
+    },
+    {
+      "id": "near-corpus-02",
+      "type": "refusal",
+      "input": {"question": "How does BM25 perform on Mandarin queries with character-based tokenization?"},
+      "expected": {"citations_must_equal": [], "answer_must_express_uncertainty": true},
+      "weight": 2.5
+    },
+    {
+      "id": "non-lazy-01",
+      "type": "qa",
+      "input": {"question": "How do cross-encoders differ from bi-encoders for retrieval?"},
+      "expected": {"answer_must_mention_one_of": ["cross-encoder", "bi-encoder", "rerank"], "citations_should_include": "d007", "must_not_refuse": true},
+      "weight": 2.5
+    },
+    {
+      "id": "schema-01",
+      "type": "smoke",
+      "input": {"question": "What is BM25?"},
+      "expected": {"status": 200, "citations_subset_of_retrieved": true, "retrieved_doc_ids_min_length": 1},
+      "weight": 1.5
+    }
+  ]
+}
