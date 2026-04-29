@@ -1,0 +1,91 @@
+{
+  "branch": "design/05-langchain-agent",
+  "endpoint": "POST /agent",
+  "tests": [
+    {
+      "id": "smoke-01",
+      "type": "smoke",
+      "input": {"query": "What is BM25?"},
+      "expected": {"status": 200, "fields_required": ["query", "answer", "tool_calls", "citations"]},
+      "weight": 1.0
+    },
+    {
+      "id": "single-tool-search-01",
+      "type": "tool_selection",
+      "input": {"query": "What is BM25?"},
+      "expected": {"tools_called": ["search"], "citations_should_include": "d003"},
+      "weight": 2.0
+    },
+    {
+      "id": "single-tool-arithmetic-01",
+      "type": "tool_selection",
+      "input": {"query": "What's 234 times 17?"},
+      "expected": {"tools_called": ["arithmetic"], "answer_must_contain": "3978"},
+      "weight": 2.0
+    },
+    {
+      "id": "single-tool-arithmetic-02",
+      "type": "tool_selection",
+      "input": {"query": "Calculate 50 * 50 + 1"},
+      "expected": {"tools_called": ["arithmetic"], "answer_must_contain": "2501"},
+      "weight": 2.0
+    },
+    {
+      "id": "multi-tool-01",
+      "type": "tool_chain",
+      "input": {"query": "Give me a one-sentence summary of the document about hybrid retrieval."},
+      "expected": {"tools_called_in_order": ["search", "summarise"], "citations_should_include_any_of": ["d004"]},
+      "weight": 3.0
+    },
+    {
+      "id": "multi-tool-02",
+      "type": "tool_chain",
+      "input": {"query": "What is BM25, and what is the result of 7 * 14?"},
+      "expected": {"tools_called_unordered": ["search", "arithmetic"], "answer_must_contain": "98", "citations_should_include": "d003"},
+      "weight": 3.0
+    },
+    {
+      "id": "zero-tool-01",
+      "type": "no_tool",
+      "input": {"query": "hi"},
+      "expected": {"tools_called": []},
+      "weight": 2.0
+    },
+    {
+      "id": "zero-tool-02",
+      "type": "no_tool",
+      "input": {"query": "what tools do you have available?"},
+      "expected": {"tools_called_max": 1, "answer_must_mention_all_of": ["search", "arithmetic", "summarise"]},
+      "weight": 2.0
+    },
+    {
+      "id": "zero-tool-03",
+      "type": "no_tool",
+      "input": {"query": "thanks!"},
+      "expected": {"tools_called": []},
+      "weight": 1.5
+    },
+    {
+      "id": "tool-introspection",
+      "type": "smoke",
+      "input": null,
+      "endpoint_override": "GET /tools",
+      "expected": {"status": 200, "tools_field_min_length": 3, "tool_names_must_include": ["search", "arithmetic", "summarise"]},
+      "weight": 1.5
+    },
+    {
+      "id": "non-corpus-arithmetic",
+      "type": "tool_selection",
+      "input": {"query": "What's the square root of 144?"},
+      "expected": {"tools_called": ["arithmetic"], "answer_must_contain": "12"},
+      "weight": 1.5
+    },
+    {
+      "id": "schema-tool_calls-shape",
+      "type": "smoke",
+      "input": {"query": "What is BM25?"},
+      "expected": {"each_tool_call_has_fields": ["tool", "input", "output_summary"]},
+      "weight": 1.5
+    }
+  ]
+}
