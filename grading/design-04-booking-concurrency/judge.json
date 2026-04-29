@@ -1,0 +1,127 @@
+{
+  "branch": "design/04-booking-concurrency",
+  "endpoint": "POST /bookings",
+  "tests": [
+    {
+      "id": "smoke-reset",
+      "type": "smoke",
+      "endpoint_override": "POST /reset",
+      "input": {"slots": [{"slot_id": "smoke-1", "label": "Smoke"}]},
+      "expected": {"status_in": [200, 204]},
+      "weight": 1.0
+    },
+    {
+      "id": "smoke-list",
+      "type": "smoke",
+      "endpoint_override": "GET /slots",
+      "expected": {
+        "instructions": "After the previous test reset the inventory to one slot 'smoke-1', GET /slots should return 200 with a 'slots' array containing exactly one entry with slot_id='smoke-1', label='Smoke', is_booked=false (or False).",
+        "status": 200,
+        "slots_count": 1
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "single-booking",
+      "type": "booking_basic",
+      "expected": {
+        "instructions": "Step 1: POST /reset {slots: [{slot_id: 'sb', label: 'Single'}]}. Step 2: POST /bookings {slot_id: 'sb', user_id: 'alice'}. Expect 201 with booking_id, slot_id='sb', user_id='alice', and a created_at timestamp.",
+        "step_2_status": 201,
+        "fields_required": ["booking_id", "slot_id", "user_id"]
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "double-booking-409",
+      "type": "booking_conflict",
+      "expected": {
+        "instructions": "Step 1: POST /reset with one slot 'db'. Step 2: POST /bookings {slot_id: 'db', user_id: 'alice'} → expect 201. Step 3: POST /bookings {slot_id: 'db', user_id: 'bob'} → MUST return 409 (slot already booked). Critically: NOT 200, NOT 201, NOT 500.",
+        "step_3_status": 409
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "race-20-concurrent",
+      "type": "concurrency",
+      "concurrency": 20,
+      "expected": {
+        "instructions": "Step 1: POST /reset with one slot 'race'. Step 2: Fire 20 POST /bookings requests CONCURRENTLY, each with slot_id='race' and user_id=u_<i> for i in 0..19. Collect the 20 status codes. Expected aggregate: EXACTLY ONE 201 and EXACTLY 19 409s. NEVER 2 successes. Total of 20 responses, all of which are either 201 or 409.",
+        "expected_201_count": 1,
+        "expected_409_count": 19,
+        "no_5xx": true
+      },
+      "weight": 5.0
+    },
+    {
+      "id": "race-second-slot-independent",
+      "type": "concurrency",
+      "concurrency": 5,
+      "expected": {
+        "instructions": "Step 1: POST /reset with TWO slots 's1' and 's2'. Step 2: Fire 5 POSTs to s1 AND 5 POSTs to s2 all concurrently (10 total). Expected: exactly 1 success per slot (2 successes total, 8 conflicts).",
+        "expected_201_count": 2,
+        "expected_409_count": 8
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "cancel-and-rebook",
+      "type": "lifecycle",
+      "expected": {
+        "instructions": "Step 1: POST /reset with one slot 'cr'. Step 2: POST /bookings {slot_id: 'cr', user_id: 'alice'} → capture booking_id BID, expect 201. Step 3: DELETE /bookings/<BID>?user_id=alice → expect 204. Step 4: GET /slots → s1.is_booked must be false. Step 5: POST /bookings {slot_id: 'cr', user_id: 'bob'} → expect 201 (slot is free again).",
+        "all_steps_must_succeed": true
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "delete-wrong-user",
+      "type": "permission",
+      "expected": {
+        "instructions": "Step 1: POST /reset with slot 'wu'. Step 2: POST /bookings {slot_id: 'wu', user_id: 'alice'} → capture BID. Step 3: DELETE /bookings/<BID>?user_id=mallory → MUST be 409 OR 403 (NOT 204, NOT 200). Step 4: DELETE /bookings/<BID>?user_id=alice → expect 204 (the rightful owner can cancel).",
+        "step_3_status_in": [409, 403],
+        "step_4_status": 204
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "delete-missing-404",
+      "type": "smoke",
+      "endpoint_override": "DELETE /bookings/this-booking-id-was-never-created?user_id=alice",
+      "expected": {"status": 404},
+      "weight": 1.0
+    },
+    {
+      "id": "book-missing-slot-404",
+      "type": "booking_basic",
+      "expected": {
+        "instructions": "Step 1: POST /reset with slots [{slot_id: 'real', label: 'R'}]. Step 2: POST /bookings {slot_id: 'phantom', user_id: 'alice'} — slot 'phantom' does NOT exist in the inventory. Expected: 404 with an error message naming the missing slot.",
+        "step_2_status": 404
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "book-missing-fields-400",
+      "type": "smoke",
+      "input": {"slot_id": ""},
+      "expected": {"status": 400},
+      "weight": 1.0
+    },
+    {
+      "id": "is-booked-consistency",
+      "type": "consistency",
+      "expected": {
+        "instructions": "Step 1: POST /reset with slots ['c1', 'c2', 'c3']. Step 2: POST /bookings {slot_id: 'c2', user_id: 'alice'} → expect 201. Step 3: GET /slots → MUST show c1.is_booked=false, c2.is_booked=true, c3.is_booked=false. The flags must be consistent with actual bookings.",
+        "consistent": true
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "no-phantom-on-409",
+      "type": "consistency",
+      "expected": {
+        "instructions": "Step 1: POST /reset with slot 'np'. Step 2: POST /bookings {slot_id: 'np', user_id: 'alice'} → expect 201, capture BID_winner. Step 3: POST /bookings {slot_id: 'np', user_id: 'bob'} → expect 409 with body.booking_id_existing == BID_winner (the response identifies the winning booking). Step 4: GET /bookings/<some_booking_id_NOT_BID_winner> — there should be NO record of bob's failed attempt. The 409 must not have created a phantom record.",
+        "no_phantom_record": true
+      },
+      "weight": 2.0
+    }
+  ]
+}
