@@ -1,4 +1,4 @@
-# AI System Design — RAG + LangChain
+# System Design Hands-On — RAG + LangChain
 
 A hands-on system-design course where you **build and host a small distributed-systems primitive end-to-end**, then submit a public URL. An LMS-side LLM judge probes your service with adversarial questions and grades answers against a rubric.
 
@@ -39,15 +39,15 @@ This course gives you:
 ## Quick start
 
 ```bash
-git clone https://github.com/tusharbisht/ai-system-design-rag.git
-cd ai-system-design-rag
+git clone https://github.com/tusharbisht/system-design-hands-on.git
+cd system-design-hands-on
 git checkout design/01-semantic-search
 cat EXERCISE.md            # framing
 cat SPEC.md                # API contract
 cat EXAMPLES.md            # sample requests
 ```
 
-Build, host, submit on the LMS at `https://<lms-host>/courses/tusharbisht-ai-system-design-rag`.
+Build, host, submit on the LMS at `https://<lms-host>/courses/tusharbisht-system-design-hands-on`.
 
 ## What you'll need
 
