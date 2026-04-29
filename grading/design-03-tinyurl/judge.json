@@ -31,10 +31,25 @@
     {
       "id": "collision-01",
       "type": "uniqueness",
+      "input": {"long_url": "https://collision.example/path-{i}-zzzzz"},
+      "fanout": 500,
       "expected": {
-        "instructions": "Issue 50 POST /shorten calls each with a DIFFERENT random long_url (e.g., https://example.com/<8-char-random>). Collect all returned short_codes. They must all be distinct (50 unique codes). Even one collision → score 0 on this test.",
-        "n_calls": 50,
-        "must_all_be_distinct": true
+        "instructions": "The judge fires 500 POST /shorten calls, each with a DIFFERENT long_url (path-0 through path-499). Read `observed.distinct_response_bodies_seen` AND inspect the responses to count distinct `short_code` values. With 500 distinct URLs you MUST get 500 distinct short_codes. Score scales with the count: 500=10, 499=8, 498=6, 497=4, ≤496=0. Even one collision in 500 means the encoding is too short or the hash is colliding — fundamental scaling bug.",
+        "n_calls": 500,
+        "must_all_be_distinct": true,
+        "min_distinct_codes": 500
+      },
+      "weight": 5.0
+    },
+    {
+      "id": "idempotent-volume",
+      "type": "idempotency",
+      "input": {"long_url": "https://volume.example/canonical"},
+      "repeat": 100,
+      "expected": {
+        "instructions": "100 sequential POST /shorten calls with the SAME long_url. Inspect responses and observed.distinct_response_bodies_seen. ALL 100 short_codes MUST be identical. If `distinct_response_bodies_seen` > 1 the bodies differ — could be timestamps in body (acceptable IF short_code itself is identical across calls — verify by inspecting responses). If short_codes themselves vary across the 100 calls → 0 (non-idempotent under volume — race condition or non-deterministic id generation).",
+        "all_codes_must_match": true,
+        "n_calls": 100
       },
       "weight": 3.0
     },

@@ -19,18 +19,33 @@ The test instructions describe how to issue `repeat` copies of the same `POST /s
 
 Critique should quote the exact returned codes, e.g., "calls returned ['aB3xY7', 'aB3xY7', 'aB3xY7', 'aB3xY7', 'aB3xY7'] — perfect idempotency".
 
-### `uniqueness`
+### `uniqueness` — collision under bombardment
 
-Issue 50 POST calls with distinct random long URLs. Collect short_codes; check the set size is 50.
+The judge fires **500 distinct POST /shorten calls** (paths `path-0`…`path-499`). Inspect every short_code returned; the set must contain 500 distinct values. This is the bombardment test — a 5-char alphanumeric hash, MD5-prefix, or naïve random ID will start colliding well before 500.
 
 | Outcome | Score |
 | --- | --- |
-| 50 distinct codes across 50 distinct URLs | **10** |
-| 49 distinct (one collision) | 5 |
-| ≤ 48 distinct | **0** |
-| Service errors out > 5% of calls | 0 |
+| 500 distinct short_codes | **10** |
+| 499 distinct (1 collision) | 8 |
+| 498 distinct (2 collisions) | 6 |
+| 497 distinct (3 collisions) | 4 |
+| ≤ 496 distinct (≥4 collisions) | **0** |
+| Service 5xx rate > 1% during the 500 calls | **0** (cannot scale to 500 sequential calls) |
 
-Critique should report the actual count, e.g., "47 distinct codes from 50 URLs — 3 collisions detected on a 5-char hash prefix".
+Critique must quote the exact distinct count and at least two colliding pairs by index — e.g., "473 distinct from 500 URLs; path-12 and path-417 both returned `aB3xY`; indicates a 5-char base62 hash prefix with ~1 collision per 250 keys".
+
+### `idempotency` under volume
+
+100 sequential POST calls with the same long_url. The judge inspects every response. Even ONE differing short_code across the 100 calls means the implementation isn't actually idempotent — it just got lucky on the 5-call test.
+
+| Outcome | Score |
+| --- | --- |
+| 100 of 100 short_codes identical | **10** |
+| 99 of 100 identical (one drift — race condition under volume) | 4 |
+| ≤ 98 of 100 identical | **0** |
+| Status mostly 201 instead of 200 (creates duplicates) | drop 2 from above |
+
+Critique must report: distinct short_codes across the 100 calls, and the modal short_code with its frequency.
 
 ### `roundtrip`
 
