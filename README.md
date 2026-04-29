@@ -11,11 +11,11 @@ A hands-on system-design course where you **build and host a small distributed-s
 | [`tour/workflow`](../../tree/tour/workflow) | how the course works, demo URL submission | 15 min | — |
 | [`design/01-semantic-search`](../../tree/design/01-semantic-search) | `POST /search` semantic search over a fixed corpus | 4–6h | recall@K, latency p95 |
 | [`design/02-rag-qa`](../../tree/design/02-rag-qa) | `POST /ask` — retrieve + answer with citations | 6–8h | answer faithfulness, citation accuracy, OOC refusal |
-| [`design/03-hybrid-search`](../../tree/design/03-hybrid-search) | BM25 + vector + reranker | 6–8h | MRR vs vector baseline; keyword-heavy queries |
-| [`design/04-conversational-rag`](../../tree/design/04-conversational-rag) | `POST /chat` with session memory, coref resolution | 8–10h | multi-turn coherence |
 | [`design/05-langchain-agent`](../../tree/design/05-langchain-agent) | LangChain agent: router + tools (search, arithmetic, summarise) | 8–12h | tool selection accuracy, multi-step reasoning |
 
 Recommended order: top-to-bottom. Each branch builds ideas you'll reuse downstream.
+
+> **Coming in v2:** `design/03-hybrid-search` (BM25 + vector + reranker) and `design/04-conversational-rag` (session memory + coref). The shape of the course handles them; the branches will land once cohort feedback on 01/02/05 is in.
 
 ## Submission flow
 
@@ -69,7 +69,7 @@ What IS graded: **what your service returns when probed.** Pick the stack you wa
 
 ## Course metadata
 
-- **Format**: 5 system-design branches + 1 walkthrough
-- **Total time**: 30–50 hours of focused work
+- **Format**: 3 system-design branches + 1 walkthrough (v1; expanding to 5 in v2)
+- **Total time**: 18–26 hours of focused work
 - **Prereqs**: comfortable with HTTP APIs, JSON, and *one* programming language
-- **Output**: a portfolio of 5 hosted services demonstrating retrieval system fundamentals
+- **Output**: a portfolio of hosted services demonstrating retrieval system fundamentals
