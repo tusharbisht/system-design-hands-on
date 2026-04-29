@@ -6,16 +6,25 @@ A hands-on system-design course where you **build and host a small distributed-s
 
 ## Course map
 
+### Retrieval / RAG / agents
+
 | Branch | What you build | Time | Auto-graded |
 | --- | --- | --- | --- |
 | [`tour/workflow`](../../tree/tour/workflow) | how the course works, demo URL submission | 15 min | — |
 | [`design/01-semantic-search`](../../tree/design/01-semantic-search) | `POST /search` semantic search over a fixed corpus | 4–6h | recall@K, latency p95 |
 | [`design/02-rag-qa`](../../tree/design/02-rag-qa) | `POST /ask` — retrieve + answer with citations | 6–8h | answer faithfulness, citation accuracy, OOC refusal |
 | [`design/05-langchain-agent`](../../tree/design/05-langchain-agent) | LangChain agent: router + tools (search, arithmetic, summarise) | 8–12h | tool selection accuracy, multi-step reasoning |
+| [`design/06-vector-database`](../../tree/design/06-vector-database) | real vector DB (Pinecone / Weaviate / Qdrant / pgvector) with metadata filters, upserts, bulk atomicity | 6–10h | recall, filter correctness, upsert vs insert, delete durability |
+| [`design/07-mcp-server`](../../tree/design/07-mcp-server) | MCP server (Streamable HTTP transport): `initialize` / `tools/list` / `tools/call` | 4–6h | JSON-RPC envelope, three required tools, protocol-vs-tool error distinction |
 
-Recommended order: top-to-bottom. Each branch builds ideas you'll reuse downstream.
+### Classic system-design — scale + concurrency
 
-> **Coming in v2:** `design/03-hybrid-search` (BM25 + vector + reranker) and `design/04-conversational-rag` (session memory + coref). The shape of the course handles them; the branches will land once cohort feedback on 01/02/05 is in.
+| Branch | What you build | Time | Auto-graded |
+| --- | --- | --- | --- |
+| [`design/03-tinyurl`](../../tree/design/03-tinyurl) | URL shortener with idempotent shortening, custom aliases, 302 round-trip | 4–6h | idempotency, no collisions on 50 distinct URLs, alias semantics |
+| [`design/04-booking-concurrency`](../../tree/design/04-booking-concurrency) | reservation service — 20 concurrent users race for one slot, exactly one wins | 6–8h | race-condition correctness (40% weight), cancel + re-book, owner-only DELETE |
+
+Recommended order for the curious: tour → 01 → 02 → 06 → 03 → 04 → 05 → 07.
 
 ## Submission flow
 
@@ -69,7 +78,7 @@ What IS graded: **what your service returns when probed.** Pick the stack you wa
 
 ## Course metadata
 
-- **Format**: 3 system-design branches + 1 walkthrough (v1; expanding to 5 in v2)
-- **Total time**: 18–26 hours of focused work
+- **Format**: 7 system-design branches + 1 walkthrough
+- **Total time**: 38–58 hours of focused work
 - **Prereqs**: comfortable with HTTP APIs, JSON, and *one* programming language
-- **Output**: a portfolio of hosted services demonstrating retrieval system fundamentals
+- **Output**: a portfolio of hosted services demonstrating retrieval, agents, classic system design, and protocol design
