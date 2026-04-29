@@ -1,0 +1,119 @@
+{
+  "branch": "design/06-vector-database",
+  "endpoint": "POST /search",
+  "tests": [
+    {
+      "id": "smoke-01",
+      "type": "smoke",
+      "endpoint_override": "GET /health",
+      "expected": {"status": 200},
+      "weight": 1.0
+    },
+    {
+      "id": "index-and-recall",
+      "type": "lifecycle",
+      "expected": {
+        "instructions": "Step 1: POST /index for 4 documents:\n  d1: 'Postgres uses MVCC for concurrency.', metadata={category:'database'}\n  d2: 'BM25 is a bag-of-words ranking function based on TF and IDF.', metadata={category:'retrieval'}\n  d3: 'Reciprocal Rank Fusion combines ranked lists from multiple retrievers.', metadata={category:'retrieval'}\n  d4: 'Connection pooling matters for async workloads.', metadata={category:'database'}\nEach should return 200 or 201.\nStep 2: POST /search {query: 'what is BM25 and how does it score', k: 3}. Expected: top result is d2.\nStep 3: POST /search {query: 'how does Postgres handle concurrent reads', k: 3}. Expected: top result is d1.",
+        "step_2_top_doc": "d2",
+        "step_3_top_doc": "d1"
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "filter-restricts-results",
+      "type": "filter",
+      "expected": {
+        "instructions": "Assuming the 4 docs from index-and-recall are indexed. POST /search {query: 'BM25 ranking', k: 5, filter: {category: 'database'}}. The query is semantically about retrieval (BM25), but the filter restricts to database docs. Expected: results contains ONLY d1 and d4 (or whichever subset of those is non-empty). MUST NOT contain d2 or d3 (those are retrieval).",
+        "results_must_only_contain_doc_ids_in": ["d1", "d4"],
+        "results_must_not_contain": ["d2", "d3"]
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "filter-empty-no-match",
+      "type": "filter",
+      "expected": {
+        "instructions": "POST /search {query: 'anything', filter: {category: 'nonexistent-category-xyz'}}. The filter matches no docs. Expected: status 200 with results: [] (empty array, NOT 404). The service must distinguish 'no matches' from 'collection not found'.",
+        "status": 200,
+        "results_must_be_empty": true
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "filter-empty-or-missing-equals-no-filter",
+      "type": "filter",
+      "expected": {
+        "instructions": "POST /search {query: 'BM25', k: 5, filter: {}}. Empty filter should behave the same as no filter at all. Expected: results include both retrieval AND database docs (the result set is unfiltered). Top result should still be d2 (the BM25 doc).",
+        "top_doc": "d2",
+        "results_should_span_categories": true
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "upsert-replaces",
+      "type": "upsert",
+      "expected": {
+        "instructions": "Step 1: POST /index {doc_id: 'up1', text: 'old version of the text', metadata: {category: 'test'}}. Step 2: GET /stats - capture total_docs as N1. Step 3: POST /index {doc_id: 'up1', text: 'NEW version of the text completely different', metadata: {category: 'test'}}. Step 4: GET /stats - total_docs MUST equal N1 (NOT N1+1). The doc_id was the same, so the index size shouldn't grow. Step 5: GET /docs/up1 - text MUST equal 'NEW version of the text completely different' (the latest), not the old.",
+        "stats_unchanged": true,
+        "doc_text_is_new": true
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "delete-durable",
+      "type": "lifecycle",
+      "expected": {
+        "instructions": "Step 1: POST /index {doc_id: 'del1', text: 'I will be deleted', metadata: {category: 'temp'}}. Step 2: DELETE /docs/del1 - expect 204. Step 3: GET /docs/del1 - expect 404. Step 4: POST /search {query: 'I will be deleted', k: 5} - the results MUST NOT contain del1.",
+        "all_steps_must_succeed": true,
+        "del1_must_not_appear_in_search": true
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "bulk-atomicity",
+      "type": "bulk",
+      "expected": {
+        "instructions": "Step 1: POST /index/bulk {documents: [{doc_id: 'b_ok', text: 'good doc', metadata: {}}, {doc_id: 'b_bad', text: '', metadata: {}}]}. The second doc has empty text. Expected: status 400 with an error message. Step 2: GET /docs/b_ok - MUST return 404 (the first doc was NOT inserted because the second one failed; the bulk was atomic).",
+        "bulk_status": 400,
+        "first_doc_not_inserted": true
+      },
+      "weight": 2.5
+    },
+    {
+      "id": "bulk-success",
+      "type": "bulk",
+      "expected": {
+        "instructions": "POST /index/bulk {documents: [{doc_id: 'bs_1', text: 'first good', metadata: {}}, {doc_id: 'bs_2', text: 'second good', metadata: {}}]}. All docs valid. Expected: status 200 with indexed_count: 2 and doc_ids contains both 'bs_1' and 'bs_2'. Then GET /docs/bs_1 and GET /docs/bs_2 both succeed (200).",
+        "status": 200,
+        "indexed_count": 2
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "schema-search-result",
+      "type": "smoke",
+      "expected": {
+        "instructions": "POST /search {query: 'BM25', k: 1}. Each result MUST have fields: doc_id (string), score (number), text (string), metadata (object). Score 0 if any field missing or wrong type.",
+        "fields_required_per_result": ["doc_id", "score", "text", "metadata"]
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "stats-shape",
+      "type": "smoke",
+      "endpoint_override": "GET /stats",
+      "expected": {
+        "instructions": "Body must contain total_docs (integer >= 0) and categories (object mapping category-name to count-integer). The categories should reflect the docs currently in the index from previous tests.",
+        "fields_required": ["total_docs", "categories"]
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "delete-missing-404",
+      "type": "smoke",
+      "endpoint_override": "DELETE /docs/this-doc-was-never-indexed-zzz",
+      "expected": {"status": 404},
+      "weight": 1.0
+    }
+  ]
+}
