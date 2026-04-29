@@ -1,0 +1,130 @@
+{
+  "branch": "design/03-tinyurl",
+  "endpoint": "POST /shorten",
+  "tests": [
+    {
+      "id": "smoke-01",
+      "type": "smoke",
+      "input": {"long_url": "https://example.com/smoke-test-page"},
+      "expected": {"status_in": [200, 201], "fields_required": ["long_url", "short_code", "short_url"]},
+      "weight": 1.0
+    },
+    {
+      "id": "idempotent-01",
+      "type": "idempotency",
+      "input": {"long_url": "https://en.wikipedia.org/wiki/URL_shortening"},
+      "expected": {
+        "instructions": "Call this 5 times in sequence. All 5 short_code values MUST be identical. The status may be 201 on first call and 200 on subsequent calls.",
+        "all_codes_must_match": true
+      },
+      "repeat": 5,
+      "weight": 3.0
+    },
+    {
+      "id": "idempotent-02",
+      "type": "idempotency",
+      "input": {"long_url": "https://github.com/python/cpython"},
+      "expected": {"all_codes_must_match": true},
+      "repeat": 4,
+      "weight": 2.0
+    },
+    {
+      "id": "collision-01",
+      "type": "uniqueness",
+      "expected": {
+        "instructions": "Issue 50 POST /shorten calls each with a DIFFERENT random long_url (e.g., https://example.com/<8-char-random>). Collect all returned short_codes. They must all be distinct (50 unique codes). Even one collision → score 0 on this test.",
+        "n_calls": 50,
+        "must_all_be_distinct": true
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "roundtrip-01",
+      "type": "roundtrip",
+      "expected": {
+        "instructions": "Step 1: POST /shorten with long_url=https://round.example/T1, capture short_code C. Step 2: GET /<C> with follow_redirects=False. Step 3: assert response status is 302 AND response.headers['location'] == 'https://round.example/T1'.",
+        "expected_status": 302,
+        "header_location_match": true
+      },
+      "weight": 2.5
+    },
+    {
+      "id": "roundtrip-02-302-not-301",
+      "type": "redirect",
+      "expected": {
+        "instructions": "Same as roundtrip-01 but specifically check the status code is 302 (Found / temporary), not 301 (Moved Permanently). Per spec, redirects are temporary so the server can change targets later.",
+        "must_be_302": true
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "alias-fresh",
+      "type": "alias",
+      "input": {"long_url": "https://blog.example/post-1", "alias": "judge-test-blog"},
+      "expected": {
+        "status_in": [200, 201],
+        "short_code_must_equal": "judge-test-blog"
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "alias-conflict",
+      "type": "alias",
+      "expected": {
+        "instructions": "Step 1: POST /shorten with long_url=https://X.example, alias='clash-judge'. Expect 200 or 201. Step 2: POST /shorten with long_url=https://Y.example (a DIFFERENT URL), alias='clash-judge'. Step 2 MUST return 409 with an error message. NOT 200 (would mean silent overwrite). NOT 500.",
+        "step_2_status": 409
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "alias-idempotent",
+      "type": "alias",
+      "expected": {
+        "instructions": "Step 1: POST {long_url=https://Z.example, alias='same-judge'}. Step 2: POST {long_url=https://Z.example, alias='same-judge'} — SAME URL, SAME alias. Step 2 MUST be idempotent (200 or 201) and return short_code='same-judge'. Not 409.",
+        "step_2_idempotent": true
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "missing-code-404",
+      "type": "smoke",
+      "endpoint_override": "GET /this-code-was-never-created-zzzzzz9",
+      "expected": {"status": 404},
+      "weight": 1.5
+    },
+    {
+      "id": "expand-existing",
+      "type": "smoke",
+      "expected": {
+        "instructions": "Step 1: POST /shorten {long_url=https://expand.example}. Capture short_code C. Step 2: GET /api/expand/<C>. Expect 200 with body containing long_url=https://expand.example AND short_code=C AND a created_at timestamp.",
+        "fields_required": ["short_code", "long_url", "created_at"]
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "expand-missing-404",
+      "type": "smoke",
+      "endpoint_override": "GET /api/expand/this-was-never-created-xyz",
+      "expected": {"status": 404},
+      "weight": 1.0
+    },
+    {
+      "id": "invalid-url",
+      "type": "smoke",
+      "input": {"long_url": "not-a-valid-url"},
+      "expected": {"status": 400},
+      "weight": 1.0
+    },
+    {
+      "id": "code-shape",
+      "type": "smoke",
+      "input": {"long_url": "https://shape.example/t"},
+      "expected": {
+        "instructions": "POST /shorten and capture the returned short_code. It MUST: (a) be at least 5 chars, (b) match the regex ^[A-Za-z0-9_-]+$ (URL-safe alphanumerics + dash + underscore — NO spaces, no slashes, no '?').",
+        "min_length": 5,
+        "url_safe": true
+      },
+      "weight": 1.5
+    }
+  ]
+}
