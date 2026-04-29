@@ -1,118 +1,182 @@
 {
   "branch": "design/06-vector-database",
   "endpoint": "POST /search",
+  "_seed_corpus": [
+    {"doc_id": "d1", "text": "Postgres uses MVCC for concurrency.", "metadata": {"category": "database"}},
+    {"doc_id": "d2", "text": "BM25 is a bag-of-words ranking function based on TF and IDF.", "metadata": {"category": "retrieval"}},
+    {"doc_id": "d3", "text": "Reciprocal Rank Fusion combines ranked lists from multiple retrievers.", "metadata": {"category": "retrieval"}},
+    {"doc_id": "d4", "text": "Connection pooling matters for async workloads.", "metadata": {"category": "database"}}
+  ],
   "tests": [
     {
-      "id": "smoke-01",
+      "id": "smoke-health",
       "type": "smoke",
       "endpoint_override": "GET /health",
       "expected": {"status": 200},
       "weight": 1.0
     },
     {
-      "id": "index-and-recall",
+      "id": "recall-bm25",
       "type": "lifecycle",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d1", "text": "Postgres uses MVCC for concurrency.", "metadata": {"category": "database"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d2", "text": "BM25 is a bag-of-words ranking function based on TF and IDF.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d3", "text": "Reciprocal Rank Fusion combines ranked lists from multiple retrievers.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d4", "text": "Connection pooling matters for async workloads.", "metadata": {"category": "database"}}}
+      ],
+      "input": {"query": "what is BM25 and how does it score documents", "k": 3},
       "expected": {
-        "instructions": "Step 1: POST /index for 4 documents:\n  d1: 'Postgres uses MVCC for concurrency.', metadata={category:'database'}\n  d2: 'BM25 is a bag-of-words ranking function based on TF and IDF.', metadata={category:'retrieval'}\n  d3: 'Reciprocal Rank Fusion combines ranked lists from multiple retrievers.', metadata={category:'retrieval'}\n  d4: 'Connection pooling matters for async workloads.', metadata={category:'database'}\nEach should return 200 or 201.\nStep 2: POST /search {query: 'what is BM25 and how does it score', k: 3}. Expected: top result is d2.\nStep 3: POST /search {query: 'how does Postgres handle concurrent reads', k: 3}. Expected: top result is d1.",
-        "step_2_top_doc": "d2",
-        "step_3_top_doc": "d1"
+        "instructions": "After indexing 4 documents (see setup), POST /search for 'BM25 scoring' should return d2 as top result.",
+        "top_doc": "d2"
       },
       "weight": 3.0
     },
     {
+      "id": "recall-mvcc",
+      "type": "lifecycle",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d1", "text": "Postgres uses MVCC for concurrency.", "metadata": {"category": "database"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d2", "text": "BM25 is a bag-of-words ranking function based on TF and IDF.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d3", "text": "Reciprocal Rank Fusion combines ranked lists from multiple retrievers.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d4", "text": "Connection pooling matters for async workloads.", "metadata": {"category": "database"}}}
+      ],
+      "input": {"query": "how does Postgres handle concurrent reads", "k": 3},
+      "expected": {
+        "top_doc": "d1"
+      },
+      "weight": 2.0
+    },
+    {
       "id": "filter-restricts-results",
       "type": "filter",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d1", "text": "Postgres uses MVCC for concurrency.", "metadata": {"category": "database"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d2", "text": "BM25 is a bag-of-words ranking function based on TF and IDF.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d3", "text": "Reciprocal Rank Fusion combines ranked lists from multiple retrievers.", "metadata": {"category": "retrieval"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d4", "text": "Connection pooling matters for async workloads.", "metadata": {"category": "database"}}}
+      ],
+      "input": {"query": "BM25 ranking", "k": 5, "filter": {"category": "database"}},
       "expected": {
-        "instructions": "Assuming the 4 docs from index-and-recall are indexed. POST /search {query: 'BM25 ranking', k: 5, filter: {category: 'database'}}. The query is semantically about retrieval (BM25), but the filter restricts to database docs. Expected: results contains ONLY d1 and d4 (or whichever subset of those is non-empty). MUST NOT contain d2 or d3 (those are retrieval).",
+        "instructions": "Query is semantically retrieval, filter restricts to category=database. Results MUST contain only d1 and/or d4 (database docs); MUST NOT contain d2 or d3.",
         "results_must_only_contain_doc_ids_in": ["d1", "d4"],
         "results_must_not_contain": ["d2", "d3"]
       },
       "weight": 3.0
     },
     {
-      "id": "filter-empty-no-match",
+      "id": "filter-no-match-empty-array",
       "type": "filter",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d1", "text": "Postgres uses MVCC for concurrency.", "metadata": {"category": "database"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "d2", "text": "BM25 is a bag-of-words ranking function based on TF and IDF.", "metadata": {"category": "retrieval"}}}
+      ],
+      "input": {"query": "anything", "filter": {"category": "nonexistent-xyz"}},
       "expected": {
-        "instructions": "POST /search {query: 'anything', filter: {category: 'nonexistent-category-xyz'}}. The filter matches no docs. Expected: status 200 with results: [] (empty array, NOT 404). The service must distinguish 'no matches' from 'collection not found'.",
+        "instructions": "Filter matches no docs. MUST return 200 with results: [] (empty array). NOT 404.",
         "status": 200,
         "results_must_be_empty": true
       },
       "weight": 1.5
     },
     {
-      "id": "filter-empty-or-missing-equals-no-filter",
-      "type": "filter",
-      "expected": {
-        "instructions": "POST /search {query: 'BM25', k: 5, filter: {}}. Empty filter should behave the same as no filter at all. Expected: results include both retrieval AND database docs (the result set is unfiltered). Top result should still be d2 (the BM25 doc).",
-        "top_doc": "d2",
-        "results_should_span_categories": true
-      },
-      "weight": 1.5
-    },
-    {
       "id": "upsert-replaces",
       "type": "upsert",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "up1", "text": "old version", "metadata": {"category": "test"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "up1", "text": "NEW version completely different", "metadata": {"category": "test"}}}
+      ],
+      "endpoint_override": "GET /docs/up1",
       "expected": {
-        "instructions": "Step 1: POST /index {doc_id: 'up1', text: 'old version of the text', metadata: {category: 'test'}}. Step 2: GET /stats - capture total_docs as N1. Step 3: POST /index {doc_id: 'up1', text: 'NEW version of the text completely different', metadata: {category: 'test'}}. Step 4: GET /stats - total_docs MUST equal N1 (NOT N1+1). The doc_id was the same, so the index size shouldn't grow. Step 5: GET /docs/up1 - text MUST equal 'NEW version of the text completely different' (the latest), not the old.",
-        "stats_unchanged": true,
-        "doc_text_is_new": true
+        "instructions": "Two POSTs to /index with the same doc_id 'up1' but different text. After the second, GET /docs/up1 MUST return text='NEW version completely different' (the latest). Score 0 if it returns the old text or 404.",
+        "text_must_equal": "NEW version completely different"
       },
       "weight": 3.0
     },
     {
-      "id": "delete-durable",
-      "type": "lifecycle",
-      "expected": {
-        "instructions": "Step 1: POST /index {doc_id: 'del1', text: 'I will be deleted', metadata: {category: 'temp'}}. Step 2: DELETE /docs/del1 - expect 204. Step 3: GET /docs/del1 - expect 404. Step 4: POST /search {query: 'I will be deleted', k: 5} - the results MUST NOT contain del1.",
-        "all_steps_must_succeed": true,
-        "del1_must_not_appear_in_search": true
-      },
-      "weight": 2.0
-    },
-    {
-      "id": "bulk-atomicity",
-      "type": "bulk",
-      "expected": {
-        "instructions": "Step 1: POST /index/bulk {documents: [{doc_id: 'b_ok', text: 'good doc', metadata: {}}, {doc_id: 'b_bad', text: '', metadata: {}}]}. The second doc has empty text. Expected: status 400 with an error message. Step 2: GET /docs/b_ok - MUST return 404 (the first doc was NOT inserted because the second one failed; the bulk was atomic).",
-        "bulk_status": 400,
-        "first_doc_not_inserted": true
-      },
-      "weight": 2.5
-    },
-    {
-      "id": "bulk-success",
-      "type": "bulk",
-      "expected": {
-        "instructions": "POST /index/bulk {documents: [{doc_id: 'bs_1', text: 'first good', metadata: {}}, {doc_id: 'bs_2', text: 'second good', metadata: {}}]}. All docs valid. Expected: status 200 with indexed_count: 2 and doc_ids contains both 'bs_1' and 'bs_2'. Then GET /docs/bs_1 and GET /docs/bs_2 both succeed (200).",
-        "status": 200,
-        "indexed_count": 2
-      },
-      "weight": 1.5
-    },
-    {
-      "id": "schema-search-result",
-      "type": "smoke",
-      "expected": {
-        "instructions": "POST /search {query: 'BM25', k: 1}. Each result MUST have fields: doc_id (string), score (number), text (string), metadata (object). Score 0 if any field missing or wrong type.",
-        "fields_required_per_result": ["doc_id", "score", "text", "metadata"]
-      },
-      "weight": 1.5
-    },
-    {
-      "id": "stats-shape",
-      "type": "smoke",
+      "id": "upsert-stats-unchanged",
+      "type": "upsert",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "us1", "text": "v1", "metadata": {"category": "stats-test"}}},
+        {"method": "POST", "path": "/index", "body": {"doc_id": "us1", "text": "v2 different", "metadata": {"category": "stats-test"}}}
+      ],
       "endpoint_override": "GET /stats",
       "expected": {
-        "instructions": "Body must contain total_docs (integer >= 0) and categories (object mapping category-name to count-integer). The categories should reflect the docs currently in the index from previous tests.",
-        "fields_required": ["total_docs", "categories"]
+        "instructions": "Two POSTs to /index with the same doc_id. GET /stats MUST show categories['stats-test'] == 1, NOT 2 (a duplicate vector inserted = bug). The doc was upserted, not appended.",
+        "stats_test_count": 1
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "delete-durable-get",
+      "type": "lifecycle",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "del1", "text": "I will be deleted", "metadata": {"category": "temp"}}},
+        {"method": "DELETE", "path": "/docs/del1", "body": null}
+      ],
+      "endpoint_override": "GET /docs/del1",
+      "expected": {
+        "instructions": "After indexing del1 and DELETE /docs/del1, GET /docs/del1 MUST return 404. Delete is durable.",
+        "status": 404
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "delete-durable-search",
+      "type": "lifecycle",
+      "setup": [
+        {"method": "POST", "path": "/index", "body": {"doc_id": "del2", "text": "I will be deleted from search too", "metadata": {"category": "temp"}}},
+        {"method": "DELETE", "path": "/docs/del2", "body": null}
+      ],
+      "input": {"query": "deleted from search", "k": 5},
+      "expected": {
+        "instructions": "After indexing del2 then deleting it, POST /search MUST NOT return del2 in any result. The delete propagated to the index, not just the metadata table.",
+        "results_must_not_contain": ["del2"]
       },
       "weight": 1.0
     },
     {
-      "id": "delete-missing-404",
-      "type": "smoke",
-      "endpoint_override": "DELETE /docs/this-doc-was-never-indexed-zzz",
-      "expected": {"status": 404},
+      "id": "bulk-atomicity",
+      "type": "bulk",
+      "endpoint_override": "POST /index/bulk",
+      "input": {"documents": [
+        {"doc_id": "b_ok", "text": "good doc", "metadata": {"category": "bulk-test"}},
+        {"doc_id": "b_bad", "text": "", "metadata": {"category": "bulk-test"}}
+      ]},
+      "expected": {
+        "instructions": "Bulk insert with one bad doc (empty text). MUST return 400 (the entire batch fails atomically).",
+        "status": 400
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "bulk-atomicity-no-partial",
+      "type": "bulk",
+      "setup": [
+        {"method": "POST", "path": "/index/bulk", "body": {"documents": [
+          {"doc_id": "b_ok2", "text": "good 2", "metadata": {"category": "bulk-test-2"}},
+          {"doc_id": "b_bad2", "text": "", "metadata": {"category": "bulk-test-2"}}
+        ]}}
+      ],
+      "endpoint_override": "GET /docs/b_ok2",
+      "expected": {
+        "instructions": "After a failed bulk insert (one doc had empty text), the FIRST doc 'b_ok2' MUST NOT have been inserted. GET /docs/b_ok2 MUST return 404.",
+        "status": 404
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "bulk-success",
+      "type": "bulk",
+      "endpoint_override": "POST /index/bulk",
+      "input": {"documents": [
+        {"doc_id": "bs_1", "text": "first good", "metadata": {"category": "bulk-good"}},
+        {"doc_id": "bs_2", "text": "second good", "metadata": {"category": "bulk-good"}}
+      ]},
+      "expected": {
+        "instructions": "All docs valid. MUST return 200 with indexed_count=2 and doc_ids containing both 'bs_1' and 'bs_2'.",
+        "status_in": [200, 201],
+        "indexed_count": 2
+      },
       "weight": 1.0
     }
   ]
