@@ -1,0 +1,156 @@
+{
+  "branch": "design/07-mcp-server",
+  "endpoint": "POST /mcp",
+  "tests": [
+    {
+      "id": "smoke-health",
+      "type": "smoke",
+      "endpoint_override": "GET /health",
+      "expected": {"status": 200},
+      "weight": 1.0
+    },
+    {
+      "id": "initialize-handshake",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-06-18",
+          "capabilities": {"roots": {"listChanged": true}},
+          "clientInfo": {"name": "judge-client", "version": "0.1"}
+        }
+      },
+      "expected": {
+        "instructions": "Response body MUST have: jsonrpc='2.0', id=1, AND a 'result' object containing protocolVersion='2025-06-18', capabilities (with tools sub-object indicating tool support), and serverInfo (object with name and version strings). HTTP status must be 200.",
+        "status": 200,
+        "result_required_fields": ["protocolVersion", "capabilities", "serverInfo"]
+      },
+      "weight": 2.5
+    },
+    {
+      "id": "tools-list-shape",
+      "type": "rpc",
+      "input": {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+      "expected": {
+        "instructions": "Response body's result.tools MUST be an array containing exactly the three required tools by name: 'echo', 'add', 'now'. Each entry MUST have name (string), description (string), and inputSchema (object that looks like a JSON Schema — type='object', properties is an object). Score 0 if any of the three tools is missing or if inputSchema is missing/empty.",
+        "tools_must_include": ["echo", "add", "now"],
+        "each_tool_required_fields": ["name", "description", "inputSchema"]
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "tools-call-echo",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+        "params": {"name": "echo", "arguments": {"text": "hello world"}}
+      },
+      "expected": {
+        "instructions": "Response.result MUST have isError=false AND content=[{type:'text', text: <some-json-string>}]. Parse content[0].text as JSON; the parsed object MUST contain echoed='hello world' AND length=11.",
+        "result_isError": false,
+        "content_text_parsed_must_contain": {"echoed": "hello world", "length": 11}
+      },
+      "weight": 2.5
+    },
+    {
+      "id": "tools-call-add",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 4, "method": "tools/call",
+        "params": {"name": "add", "arguments": {"a": 3, "b": 4}}
+      },
+      "expected": {
+        "instructions": "Response.result.isError must be false; content[0].text parsed as JSON must contain sum=7.",
+        "result_isError": false,
+        "content_text_parsed_must_contain": {"sum": 7}
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "tools-call-add-large",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 41, "method": "tools/call",
+        "params": {"name": "add", "arguments": {"a": 1000000, "b": 1234567}}
+      },
+      "expected": {
+        "instructions": "Result.content[0].text parsed must contain sum=2234567. Confirms add isn't hardcoded to small numbers.",
+        "content_text_parsed_must_contain": {"sum": 2234567}
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "tools-call-now-iso8601",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+        "params": {"name": "now", "arguments": {}}
+      },
+      "expected": {
+        "instructions": "Result.content[0].text parsed as JSON must contain a 'now_utc' field whose value is an ISO 8601 UTC timestamp (regex: ^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|\\+00:00)$). Test by parsing it as an ISO timestamp and verifying it's within ±5 minutes of the judge's wall clock.",
+        "content_text_parsed_field_required": "now_utc",
+        "iso8601_utc": true
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "tools-call-unknown",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+        "params": {"name": "thiswillnotexist", "arguments": {}}
+      },
+      "expected": {
+        "instructions": "An unknown tool name is a TOOL ERROR, NOT a protocol error. Response MUST: (a) NOT have a top-level 'error' field, (b) HAVE 'result' with isError=true, (c) result.content[0].text contains some message naming the missing tool. HTTP status should still be 200 (the JSON-RPC method itself succeeded; only the tool inside it failed). Score 0 if the response has top-level 'error' field — that's the wrong category.",
+        "must_not_have_top_level_error": true,
+        "result_isError": true,
+        "status": 200
+      },
+      "weight": 3.0
+    },
+    {
+      "id": "unknown-method",
+      "type": "rpc",
+      "input": {"jsonrpc": "2.0", "id": 7, "method": "tools/foo", "params": {}},
+      "expected": {
+        "instructions": "An unknown method IS a protocol error. Response MUST have top-level 'error' field with code=-32601 (Method not found). Should NOT have a 'result' field.",
+        "top_level_error_code": -32601,
+        "must_not_have_result": true
+      },
+      "weight": 2.0
+    },
+    {
+      "id": "id-echo-string",
+      "type": "rpc",
+      "input": {
+        "jsonrpc": "2.0", "id": "abc-xyz-123", "method": "tools/list", "params": {}
+      },
+      "expected": {
+        "instructions": "Response.id MUST equal the string 'abc-xyz-123' EXACTLY (string type, not coerced to integer or stringified-int). The MCP spec preserves id types in responses.",
+        "response_id": "abc-xyz-123"
+      },
+      "weight": 1.5
+    },
+    {
+      "id": "id-echo-int",
+      "type": "rpc",
+      "input": {"jsonrpc": "2.0", "id": 42, "method": "tools/list", "params": {}},
+      "expected": {
+        "instructions": "Response.id MUST equal integer 42 (numeric, NOT the string '42').",
+        "response_id": 42
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "jsonrpc-version-present",
+      "type": "rpc",
+      "input": {"jsonrpc": "2.0", "id": 8, "method": "tools/list", "params": {}},
+      "expected": {
+        "instructions": "Every response MUST include 'jsonrpc': '2.0' at the top level. Missing this field → score 0 on the entire envelope axis.",
+        "top_level_field_required": "jsonrpc",
+        "jsonrpc_value": "2.0"
+      },
+      "weight": 1.0
+    }
+  ]
+}
