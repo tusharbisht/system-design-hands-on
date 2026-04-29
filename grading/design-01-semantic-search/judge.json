@@ -1,0 +1,123 @@
+{
+  "branch": "design/01-semantic-search",
+  "endpoint": "POST /search",
+  "tests": [
+    {
+      "id": "smoke-01",
+      "type": "smoke",
+      "input": {"query": "what is BM25", "k": 3},
+      "expected": {
+        "status": 200,
+        "fields_required": ["query", "results"],
+        "results_fields_required": ["doc_id", "score", "title", "text"],
+        "results_max_len": 3
+      },
+      "weight": 1.0
+    },
+    {
+      "id": "recall-01",
+      "type": "ranking",
+      "input": {"query": "what is BM25 and how does it score documents", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d003"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-02",
+      "type": "ranking",
+      "input": {"query": "how does cosine similarity differ from dot product for unit vectors", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d002"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-03",
+      "type": "ranking",
+      "input": {"query": "why does my Postgres table accumulate dead tuples", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d001"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-04",
+      "type": "ranking",
+      "input": {"query": "what chunk size should I use for RAG", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d005"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-05",
+      "type": "ranking",
+      "input": {"query": "how do I combine BM25 and vector search results", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d004"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-06",
+      "type": "ranking",
+      "input": {"query": "approximate nearest neighbor index trade-offs HNSW IVF", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d006"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-07",
+      "type": "ranking",
+      "input": {"query": "how do cross encoders rerank retrieval results", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d007"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-08",
+      "type": "ranking",
+      "input": {"query": "ensuring my RAG refuses to answer when retrieval is weak", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d008"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-09",
+      "type": "ranking",
+      "input": {"query": "what is a LangChain agent and how does tool selection work", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d012"]},
+      "weight": 2.0
+    },
+    {
+      "id": "recall-10",
+      "type": "ranking",
+      "input": {"query": "how do I rate-limit API requests using token bucket", "k": 5},
+      "expected": {"top_doc_ids_must_include": ["d015"]},
+      "weight": 2.0
+    },
+    {
+      "id": "ooc-01",
+      "type": "refusal",
+      "input": {"query": "what is the airspeed velocity of an unladen swallow", "k": 5},
+      "expected": {"top_score_should_be_low": true, "low_threshold_cosine": 0.5},
+      "weight": 1.5
+    },
+    {
+      "id": "ooc-02",
+      "type": "refusal",
+      "input": {"query": "tell me a joke about pirates", "k": 3},
+      "expected": {"top_score_should_be_low": true, "low_threshold_cosine": 0.5},
+      "weight": 1.5
+    },
+    {
+      "id": "bound-01",
+      "type": "smoke",
+      "input": {"query": "vacuum", "k": 100},
+      "expected": {"status_in": [200, 400], "if_200_results_max_len": 20},
+      "weight": 1.0
+    },
+    {
+      "id": "bound-02",
+      "type": "smoke",
+      "input": {"query": "", "k": 5},
+      "expected": {"status": 400},
+      "weight": 1.0
+    },
+    {
+      "id": "determinism-01",
+      "type": "smoke",
+      "input": {"query": "what is BM25", "k": 3},
+      "expected": {"status": 200, "must_match_id": "smoke-01"},
+      "weight": 1.0
+    }
+  ]
+}
