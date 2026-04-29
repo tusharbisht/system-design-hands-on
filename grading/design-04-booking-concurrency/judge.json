@@ -53,35 +53,84 @@
       "weight": 2.0
     },
     {
-      "id": "race-20-concurrent",
+      "id": "race-100-concurrent-x3",
       "type": "concurrency",
       "setup": [
         {"method": "POST", "path": "/reset", "body": {"slots": [{"slot_id": "race", "label": "Race"}]}}
       ],
-      "input": {"slot_id": "race", "user_id": "u_concurrent"},
-      "concurrency": 20,
+      "input": {"slot_id": "race", "user_id": "u_{i}"},
+      "concurrency": 100,
+      "iterations": 3,
       "expected": {
-        "instructions": "After reset, fire 20 POST /bookings concurrently, all to slot_id='race'. Aggregate over status_count: EXACTLY ONE 201 and EXACTLY 19 409s. NEVER 2x 201 (that's a double-booking). No 5xx allowed.",
-        "expected_201_count": 1,
-        "expected_409_count": 19,
+        "instructions": "BOMBARDMENT TEST. The judge re-runs this 3 times (iterations:3); each iteration: reset to one slot 'race', fire 100 POST /bookings concurrently with distinct user_ids. Inspect `status_count_per_iteration`. EVERY iteration MUST be exactly {201: 1, 409: 99} — NO 5xx, NO 2+ 201s. If ANY ONE of the 3 iterations shows 2+ 201s, that's a double-booking and score is 0 — even if 2 of 3 iterations were perfect (a race that fires intermittently is still a race). Allow ≤2 timeouts/iteration as long as no double-booking. Quote each iteration's status_count in the critique.",
+        "expected_201_count_per_iteration": 1,
+        "expected_409_count_per_iteration": 99,
+        "iterations": 3,
+        "any_failed_iteration_means_fail": true,
         "no_5xx": true
       },
-      "weight": 5.0
+      "weight": 8.0
     },
     {
-      "id": "race-two-slots-independent",
+      "id": "delete-race-concurrent",
       "type": "concurrency",
       "setup": [
-        {"method": "POST", "path": "/reset", "body": {"slots": [{"slot_id": "s1", "label": "S1"}, {"slot_id": "s2", "label": "S2"}]}}
+        {"method": "POST", "path": "/reset", "body": {"slots": [{"slot_id": "delrace", "label": "DelRace"}]}},
+        {"method": "POST", "path": "/bookings", "body": {"slot_id": "delrace", "user_id": "alice"},
+         "capture_as": {"key": "BID", "from": "booking_id"}}
       ],
-      "input": {"slot_id": "s1", "user_id": "u_concurrent"},
-      "concurrency": 5,
+      "endpoint_override": "DELETE /bookings/{BID}?user_id=alice",
+      "concurrency": 10,
       "expected": {
-        "instructions": "After reset with TWO slots, fire 5 concurrent POSTs all to s1. Expected: exactly 1x 201 and 4x 409. (Single-slot probe; multi-slot independence is hard to test in one judge run.)",
-        "expected_201_count": 1,
-        "expected_409_count": 4
+        "instructions": "After reset+booking by alice, the judge captures the returned booking_id and fires 10 concurrent DELETEs on the SAME booking. Aggregate over status_count: EXACTLY 1 successful delete (204 or 200) and 9× 404. NO 5xx. NEVER 2+ successes (means the delete handler is non-atomic — read-then-delete race; or the unique constraint is missing). NEVER 10× successes (silent no-op on missing — anyone can 'delete' a non-existent record). If the captured booking_id is empty (the service didn't return one in the create-booking response — that's also a bug), all 10 requests will hit `/bookings/?user_id=alice` and the score should reflect that the contract is violated upstream.",
+        "expected_success_count": 1,
+        "expected_404_count": 9,
+        "no_5xx": true
       },
-      "weight": 1.5
+      "weight": 3.0
+    },
+    {
+      "id": "cross-slot-independence",
+      "type": "concurrency",
+      "setup": [
+        {"method": "POST", "path": "/reset", "body": {"slots": [
+          {"slot_id": "fair-0", "label": "F0"}, {"slot_id": "fair-1", "label": "F1"},
+          {"slot_id": "fair-2", "label": "F2"}, {"slot_id": "fair-3", "label": "F3"},
+          {"slot_id": "fair-4", "label": "F4"}, {"slot_id": "fair-5", "label": "F5"},
+          {"slot_id": "fair-6", "label": "F6"}, {"slot_id": "fair-7", "label": "F7"},
+          {"slot_id": "fair-8", "label": "F8"}, {"slot_id": "fair-9", "label": "F9"},
+          {"slot_id": "fair-10", "label": "F10"}, {"slot_id": "fair-11", "label": "F11"},
+          {"slot_id": "fair-12", "label": "F12"}, {"slot_id": "fair-13", "label": "F13"},
+          {"slot_id": "fair-14", "label": "F14"}, {"slot_id": "fair-15", "label": "F15"},
+          {"slot_id": "fair-16", "label": "F16"}, {"slot_id": "fair-17", "label": "F17"},
+          {"slot_id": "fair-18", "label": "F18"}, {"slot_id": "fair-19", "label": "F19"},
+          {"slot_id": "fair-20", "label": "F20"}, {"slot_id": "fair-21", "label": "F21"},
+          {"slot_id": "fair-22", "label": "F22"}, {"slot_id": "fair-23", "label": "F23"},
+          {"slot_id": "fair-24", "label": "F24"}, {"slot_id": "fair-25", "label": "F25"},
+          {"slot_id": "fair-26", "label": "F26"}, {"slot_id": "fair-27", "label": "F27"},
+          {"slot_id": "fair-28", "label": "F28"}, {"slot_id": "fair-29", "label": "F29"},
+          {"slot_id": "fair-30", "label": "F30"}, {"slot_id": "fair-31", "label": "F31"},
+          {"slot_id": "fair-32", "label": "F32"}, {"slot_id": "fair-33", "label": "F33"},
+          {"slot_id": "fair-34", "label": "F34"}, {"slot_id": "fair-35", "label": "F35"},
+          {"slot_id": "fair-36", "label": "F36"}, {"slot_id": "fair-37", "label": "F37"},
+          {"slot_id": "fair-38", "label": "F38"}, {"slot_id": "fair-39", "label": "F39"},
+          {"slot_id": "fair-40", "label": "F40"}, {"slot_id": "fair-41", "label": "F41"},
+          {"slot_id": "fair-42", "label": "F42"}, {"slot_id": "fair-43", "label": "F43"},
+          {"slot_id": "fair-44", "label": "F44"}, {"slot_id": "fair-45", "label": "F45"},
+          {"slot_id": "fair-46", "label": "F46"}, {"slot_id": "fair-47", "label": "F47"},
+          {"slot_id": "fair-48", "label": "F48"}, {"slot_id": "fair-49", "label": "F49"}
+        ]}}
+      ],
+      "input": {"slot_id": "fair-{i}", "user_id": "u_{i}"},
+      "concurrency": 50,
+      "expected": {
+        "instructions": "After reset with 50 distinct slots fair-0..fair-49, the judge fires 50 concurrent POST /bookings, each targeting a DIFFERENT slot. ALL 50 must succeed (201). status_count must be {201: 50}. ANY 409 means the implementation is over-locking (e.g., a global mutex serialising all bookings instead of per-slot locks). ANY 5xx means deadlock or contention failure. ≤2 timeouts acceptable.",
+        "expected_201_count": 50,
+        "expected_409_count": 0,
+        "no_5xx": true,
+        "tests_for": "no global lock contention; per-slot independence under load"
+      },
+      "weight": 3.0
     },
     {
       "id": "delete-missing-404",
