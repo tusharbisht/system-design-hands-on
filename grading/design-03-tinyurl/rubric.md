@@ -21,7 +21,7 @@ Critique should quote the exact returned codes, e.g., "calls returned ['aB3xY7',
 
 ### `uniqueness` — collision under bombardment
 
-The judge fires **500 distinct POST /shorten calls** (paths `path-0`…`path-499`). Inspect every short_code returned; the set must contain 500 distinct values. This is the bombardment test — a 5-char alphanumeric hash, MD5-prefix, or naïve random ID will start colliding well before 500.
+The judge fires **500 distinct POST /shorten calls** (paths `path-0`…`path-499`). The metric is `observed.distinct_values_per_field.short_code` — it MUST equal 500. **Do NOT use `distinct_response_bodies_seen` for this test** — that counts distinct full bodies, which is always 500 because each response carries its unique long_url. The collision is in `short_code`, not in the whole body. A 5-char alphanumeric hash, MD5-prefix, or naïve short random ID will start colliding well before 500.
 
 | Outcome | Score |
 | --- | --- |
@@ -36,7 +36,7 @@ Critique must quote the exact distinct count and at least two colliding pairs by
 
 ### `idempotency` under volume
 
-100 sequential POST calls with the same long_url. The judge inspects every response. Even ONE differing short_code across the 100 calls means the implementation isn't actually idempotent — it just got lucky on the 5-call test.
+100 sequential POST calls with the same long_url. Metric: `observed.distinct_values_per_field.short_code` MUST equal 1. Even ONE differing short_code across the 100 calls means the implementation isn't actually idempotent — it just got lucky on the 5-call test.
 
 | Outcome | Score |
 | --- | --- |

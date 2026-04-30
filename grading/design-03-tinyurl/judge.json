@@ -34,10 +34,10 @@
       "input": {"long_url": "https://collision.example/path-{i}-zzzzz"},
       "fanout": 500,
       "expected": {
-        "instructions": "The judge fires 500 POST /shorten calls, each with a DIFFERENT long_url (path-0 through path-499). Read `observed.distinct_response_bodies_seen` AND inspect the responses to count distinct `short_code` values. With 500 distinct URLs you MUST get 500 distinct short_codes. Score scales with the count: 500=10, 499=8, 498=6, 497=4, ≤496=0. Even one collision in 500 means the encoding is too short or the hash is colliding — fundamental scaling bug.",
+        "instructions": "The judge fires 500 POST /shorten calls, each with a DIFFERENT long_url (path-0 through path-499). The KEY field to inspect is `observed.distinct_values_per_field.short_code` — the count of distinct short_code values across all 500 responses. With 500 distinct URLs you MUST get 500 distinct short_codes. Score: 500=10, 499=8, 498=6, 497=4, ≤496=0. DO NOT use `distinct_response_bodies_seen` — that counts distinct WHOLE bodies, which is always 500 because each response carries its unique long_url. The collision happens in `short_code`, not in the body as a whole.",
         "n_calls": 500,
         "must_all_be_distinct": true,
-        "min_distinct_codes": 500
+        "min_distinct_short_codes": 500
       },
       "weight": 5.0
     },
@@ -47,7 +47,7 @@
       "input": {"long_url": "https://volume.example/canonical"},
       "repeat": 100,
       "expected": {
-        "instructions": "100 sequential POST /shorten calls with the SAME long_url. Inspect responses and observed.distinct_response_bodies_seen. ALL 100 short_codes MUST be identical. If `distinct_response_bodies_seen` > 1 the bodies differ — could be timestamps in body (acceptable IF short_code itself is identical across calls — verify by inspecting responses). If short_codes themselves vary across the 100 calls → 0 (non-idempotent under volume — race condition or non-deterministic id generation).",
+        "instructions": "100 sequential POST /shorten calls with the SAME long_url. The KEY field is `observed.distinct_values_per_field.short_code` — it MUST equal 1. ALL 100 short_codes must be identical (the first call may return 201, the rest 200, but short_code must be the same). If short_code distinct count > 1, the implementation is non-idempotent under volume → 0. `distinct_response_bodies_seen` may be 1 (if no per-call timestamp) or 100 (if response includes a created_at that varies); use distinct_values_per_field.short_code as the source of truth.",
         "all_codes_must_match": true,
         "n_calls": 100
       },
